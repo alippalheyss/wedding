@@ -1,0 +1,600 @@
+import { useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Modal,
+  TextInput,
+  Alert,
+} from 'react-native';
+
+import { Filter, X, Trash2 } from 'lucide-react-native';
+import { useAuth } from '@/contexts/AuthContext';
+import { useViolations } from '@/contexts/ViolationsContext';
+import { Violation } from '@/types/violation';
+import { VIOLATION_TYPES } from '@/constants/violations';
+import Colors from '@/constants/colors';
+
+export default function AllViolationsScreen() {
+  const { user, updateActivity } = useAuth();
+  const { violations, deleteViolation } = useViolations();
+  const [selectedViolation, setSelectedViolation] = useState<Violation | null>(null);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
+  const [filterDateTo, setFilterDateTo] = useState<string>('');
+  const [filterViolationType, setFilterViolationType] = useState<string>('');
+  const [filterOfficer, setFilterOfficer] = useState<string>('');
+  const [filterRegNo, setFilterRegNo] = useState<string>('');
+
+  const filteredViolations = useMemo(() => {
+    return violations.filter((v) => {
+      if (filterDateFrom && v.date < filterDateFrom) return false;
+      if (filterDateTo && v.date > filterDateTo) return false;
+      if (filterViolationType && v.violationType !== filterViolationType) return false;
+      if (filterOfficer && !v.officer.toLowerCase().includes(filterOfficer.toLowerCase())) return false;
+      if (filterRegNo && !v.vehicleRegNo.toLowerCase().includes(filterRegNo.toLowerCase())) return false;
+      return true;
+    });
+  }, [violations, filterDateFrom, filterDateTo, filterViolationType, filterOfficer, filterRegNo]);
+
+  const clearFilters = () => {
+    setFilterDateFrom('');
+    setFilterDateTo('');
+    setFilterViolationType('');
+    setFilterOfficer('');
+    setFilterRegNo('');
+  };
+
+  const activeFiltersCount = [filterDateFrom, filterDateTo, filterViolationType, filterOfficer, filterRegNo].filter(Boolean).length;
+
+  const handleDelete = async (violationId: string) => {
+    Alert.alert(
+      'Delete Violation',
+      'Are you sure you want to delete this violation record?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteViolation(violationId);
+              setSelectedViolation(null);
+              Alert.alert('Success', 'Violation record deleted successfully');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete violation record');
+              console.error('Delete error:', error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const canDelete = user?.username === 'officer2';
+
+  if (selectedViolation) {
+    return (
+        <ScrollView style={styles.container} contentContainerStyle={styles.detailsContent}>
+          <View style={styles.detailsCard}>
+            <Text style={styles.detailTitle}>Violation Details</Text>
+            
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>ID No:</Text>
+              <Text style={styles.detailValue}>{selectedViolation.idNo}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Full Name:</Text>
+              <Text style={styles.detailValue}>{selectedViolation.fullName}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Address:</Text>
+              <Text style={styles.detailValue}>{selectedViolation.address}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Vehicle Reg No:</Text>
+              <Text style={styles.detailValue}>{selectedViolation.vehicleRegNo}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Location:</Text>
+              <Text style={styles.detailValue}>{selectedViolation.location}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Date:</Text>
+              <Text style={styles.detailValue}>{selectedViolation.date}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Time:</Text>
+              <Text style={styles.detailValue}>{selectedViolation.time}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Violation Type:</Text>
+              <Text style={styles.detailValue}>{selectedViolation.violationType}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Officer:</Text>
+              <Text style={styles.detailValue}>{selectedViolation.officer}</Text>
+            </View>
+            
+            <View style={styles.detailButtons}>
+              <TouchableOpacity style={styles.backButton} onPress={() => setSelectedViolation(null)}>
+                <Text style={styles.backButtonText}>Back to List</Text>
+              </TouchableOpacity>
+              
+              {canDelete && (
+                <TouchableOpacity 
+                  style={styles.deleteButton} 
+                  onPress={() => handleDelete(selectedViolation.id)}
+                >
+                  <Trash2 size={18} color={Colors.white} />
+                  <Text style={styles.deleteButtonText}>Delete</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </ScrollView>
+    );
+  }
+
+  return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <Text style={styles.title}>All Violations</Text>
+            <TouchableOpacity 
+              style={styles.filterButton}
+              onPress={() => {
+                updateActivity();
+                setShowFilters(true);
+              }}
+            >
+              <Filter size={20} color={Colors.primary} />
+              {activeFiltersCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.subtitle}>
+            Showing {filteredViolations.length} of {violations.length} records
+          </Text>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.content}>
+          {filteredViolations.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No violations found</Text>
+            </View>
+          ) : (
+            filteredViolations.map((violation) => (
+              <TouchableOpacity
+                key={violation.id}
+                style={styles.violationCard}
+                onPress={() => {
+                  updateActivity();
+                  setSelectedViolation(violation);
+                }}
+              >
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardName}>{violation.fullName}</Text>
+                  <Text style={styles.cardDate}>{violation.date}</Text>
+                </View>
+                
+                <View style={styles.cardRow}>
+                  <Text style={styles.cardLabel}>ID:</Text>
+                  <Text style={styles.cardText}>{violation.idNo}</Text>
+                </View>
+                
+                <View style={styles.cardRow}>
+                  <Text style={styles.cardLabel}>Vehicle:</Text>
+                  <Text style={styles.cardText}>{violation.vehicleRegNo}</Text>
+                </View>
+                
+                <View style={styles.cardRow}>
+                  <Text style={styles.cardLabel}>Violation:</Text>
+                  <Text style={styles.cardViolation}>{violation.violationType}</Text>
+                </View>
+                
+                <View style={styles.cardRow}>
+                  <Text style={styles.cardLabel}>Officer:</Text>
+                  <Text style={styles.cardText}>{violation.officer}</Text>
+                </View>
+                
+                <Text style={styles.viewDetails}>View Details →</Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+
+        <Modal
+          visible={showFilters}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowFilters(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filters</Text>
+              <TouchableOpacity onPress={() => setShowFilters(false)}>
+                <X size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Date From</Text>
+                <TextInput
+                  style={styles.input}
+                  value={filterDateFrom}
+                  onChangeText={setFilterDateFrom}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={Colors.textLight}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Date To</Text>
+                <TextInput
+                  style={styles.input}
+                  value={filterDateTo}
+                  onChangeText={setFilterDateTo}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={Colors.textLight}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Violation Type</Text>
+                <View style={styles.violationTypeList}>
+                  <TouchableOpacity
+                    style={[
+                      styles.violationTypeOption,
+                      filterViolationType === '' && styles.violationTypeOptionSelected,
+                    ]}
+                    onPress={() => setFilterViolationType('')}
+                  >
+                    <Text
+                      style={[
+                        styles.violationTypeText,
+                        filterViolationType === '' && styles.violationTypeTextSelected,
+                      ]}
+                    >
+                      All
+                    </Text>
+                  </TouchableOpacity>
+                  {VIOLATION_TYPES.map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.violationTypeOption,
+                        filterViolationType === type && styles.violationTypeOptionSelected,
+                      ]}
+                      onPress={() => setFilterViolationType(type)}
+                    >
+                      <Text
+                        style={[
+                          styles.violationTypeText,
+                          filterViolationType === type && styles.violationTypeTextSelected,
+                        ]}
+                      >
+                        {type}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Officer Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={filterOfficer}
+                  onChangeText={setFilterOfficer}
+                  placeholder="Search by officer"
+                  placeholderTextColor={Colors.textLight}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Vehicle Reg No.</Text>
+                <TextInput
+                  style={styles.input}
+                  value={filterRegNo}
+                  onChangeText={setFilterRegNo}
+                  placeholder="Search by registration"
+                  placeholderTextColor={Colors.textLight}
+                />
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.clearFiltersButton} onPress={clearFilters}>
+                  <Text style={styles.clearFiltersText}>Clear All</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.applyButton}
+                  onPress={() => setShowFilters(false)}
+                >
+                  <Text style={styles.applyButtonText}>Apply Filters</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </Modal>
+      </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
+    backgroundColor: Colors.white,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  filterButton: {
+    position: 'relative',
+    padding: 8,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: Colors.error,
+    borderRadius: 10,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: '700' as const,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  content: {
+    padding: 16,
+    gap: 12,
+    paddingBottom: 32,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: Colors.textSecondary,
+  },
+  violationCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  cardName: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  cardDate: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  cardLabel: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+    minWidth: 70,
+  },
+  cardText: {
+    fontSize: 14,
+    color: Colors.text,
+    flex: 1,
+  },
+  cardViolation: {
+    fontSize: 14,
+    color: Colors.error,
+    fontWeight: '600' as const,
+    flex: 1,
+  },
+  viewDetails: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '600' as const,
+    marginTop: 4,
+  },
+  detailsContent: {
+    padding: 16,
+  },
+  detailsCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 20,
+    gap: 16,
+  },
+  detailTitle: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  detailRow: {
+    gap: 4,
+  },
+  detailLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+  },
+  detailValue: {
+    fontSize: 16,
+    color: Colors.text,
+  },
+  detailButtons: {
+    gap: 12,
+  },
+  backButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  backButtonText: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '600' as const,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    backgroundColor: Colors.error,
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  deleteButtonText: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '600' as const,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  modalContent: {
+    padding: 16,
+    gap: 20,
+  },
+  inputGroup: {
+    gap: 8,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.text,
+  },
+  input: {
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: Colors.text,
+  },
+  violationTypeList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  violationTypeOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  violationTypeOptionSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  violationTypeText: {
+    fontSize: 13,
+    color: Colors.text,
+  },
+  violationTypeTextSelected: {
+    color: Colors.white,
+    fontWeight: '600' as const,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  clearFiltersButton: {
+    flex: 1,
+    backgroundColor: Colors.secondaryLight,
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  clearFiltersText: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '600' as const,
+  },
+  applyButton: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '600' as const,
+  },
+});
